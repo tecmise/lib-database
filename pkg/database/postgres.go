@@ -1,9 +1,9 @@
 package database
 
 import (
-	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	tools "github.com/tecmise/lib-database/pkg/gorm"
+	"gorm.io/gorm"
 	"os"
 	"strings"
 	"sync"
@@ -23,12 +23,10 @@ type PostgresConfiguration struct {
 	Ssl    bool
 }
 
-// MySQL var to use
 var Postgres = &PostgresRepository{}
 
-// StartPostgres start the DB
 func (r *PostgresRepository) Start(configuration PostgresConfiguration) {
-	_ = tools.LoadGormPostGres(
+	_ = tools.LoadGormPostgres(
 		configuration.DBUser,
 		configuration.DBPass,
 		configuration.DBHost,
@@ -37,12 +35,15 @@ func (r *PostgresRepository) Start(configuration PostgresConfiguration) {
 		configuration.Ssl)
 }
 
-// StopPostgres stop the DB
 func (r *PostgresRepository) Stop() {
-	defer r.dbPostgres.Close()
+	if r.dbPostgres != nil {
+		sqlDB, err := r.dbPostgres.DB()
+		if err == nil {
+			_ = sqlDB.Close()
+		}
+	}
 }
 
-// GetInstance returns a unique instance of gorm.DB
 func (r *PostgresRepository) GetInstance() *gorm.DB {
 
 	r.once.Do(func() {
@@ -56,8 +57,9 @@ func (r *PostgresRepository) GetInstance() *gorm.DB {
 		if err != nil {
 			panic(err.Error())
 		}
-		r.dbPostgres.SingularTable(true)
-		r.dbPostgres.LogMode(logLevel)
+		if logLevel {
+			r.dbPostgres.Logger.LogMode(4)
+		}
 	})
 	return r.dbPostgres
 }

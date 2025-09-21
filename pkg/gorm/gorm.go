@@ -3,12 +3,13 @@ package tools
 import (
 	"errors"
 	"fmt"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"github.com/sirupsen/logrus"
+	"github.com/tecmise/lib-database/pkg/logger"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormLogger "gorm.io/gorm/logger"
 	"os"
 	"strconv"
-	// Necessary to drivers postgres
-	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
 type singleton struct {
@@ -37,11 +38,11 @@ func LoadGormMySQL(user string, pass string, host string, port int, dbName strin
 	return LoadGorm("mysql", user, pass, host, port, dbName, false)
 }
 
-// LoadGormPostGres with the following parameters:
+// LoadGormPostgres with the following parameters:
 /**
  * user string, pass string, host string, port int, dbName string
 **/
-func LoadGormPostGres(user string, pass string, host string, port int, dbName string, sslMode bool) error {
+func LoadGormPostgres(user string, pass string, host string, port int, dbName string, sslMode bool) error {
 	return LoadGorm("postgres", user, pass, host, port, dbName, sslMode)
 }
 
@@ -85,7 +86,14 @@ func getGormConnection(driverName string, user string, pass string, host string,
 	var err error
 	var dsn string
 	dsn, err = generateDsn(driverName, user, pass, host, port, dbName, sslMode)
-	db, err = gorm.Open(driverName, dsn)
+
+	log := logrus.New()
+	log.SetFormatter(&logrus.JSONFormatter{})
+	log.SetLevel(logrus.InfoLevel)
+
+	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.NewGormLogrus(log, gormLogger.Info),
+	})
 
 	if err != nil {
 		fmt.Println(err)
@@ -93,7 +101,6 @@ func getGormConnection(driverName string, user string, pass string, host string,
 	//db.DB().SetConnMaxLifetime(time.Duration(getenv.DbConnPoolLifeTime) * time.Minute)
 	//db.DB().SetMaxIdleConns(getenv.DbConnPoolMaxIdle)
 	//db.DB().SetMaxOpenConns(getenv.DbConnPoolMaxOpen)
-	db.LogMode(LogModeEnable)
 	return db, err
 }
 
@@ -103,14 +110,6 @@ func firstKeyFromGormPool(object map[string]*gorm.DB) string {
 	}
 
 	return ""
-}
-
-// PurgeGormPool - Cleans pool closing connections
-func PurgeGormPool() {
-	for k, v := range poolGormDb {
-		v.Close()
-		delete(poolGormDb, k)
-	}
 }
 
 // Error godoc
