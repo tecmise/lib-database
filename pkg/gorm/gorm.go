@@ -46,6 +46,14 @@ func LoadGormPostgres(user string, pass string, host string, port int, dbName st
 	return LoadGorm("postgres", user, pass, host, port, dbName, sslMode)
 }
 
+// LoadGormPostgres with the following parameters:
+/**
+ * user string, pass string, host string, port int, dbName string
+**/
+func LoadGormClickhouse(user string, pass string, host string, port int, dbName string, sslMode bool) error {
+	return LoadGorm("clickhouse", user, pass, host, port, dbName, sslMode)
+}
+
 // LoadGorm with the following parameters:
 /**
  * driverName string (such as mysql) user string, pass string, host string, port int, dbName string
