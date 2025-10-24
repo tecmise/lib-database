@@ -44,7 +44,7 @@ func (r *PostgresRepository) Stop() {
 	}
 }
 
-func (r *PostgresRepository) GetInstance() *gorm.DB {
+func (r *PostgresRepository) GetInstance(key string) *gorm.DB {
 
 	r.once.Do(func() {
 		logLevel := os.Getenv("SHOW_SQL") != "" && strings.ToLower(os.Getenv("SHOW_SQL")) == "true"
@@ -53,7 +53,7 @@ func (r *PostgresRepository) GetInstance() *gorm.DB {
 			logrus.Debugf("To Enable sql mode set variable SHOW_SQL to true")
 		}
 		var err error
-		r.dbPostgres, err = tools.GetGormDb()
+		r.dbPostgres, err = tools.GetGormDb(key)
 		if err != nil {
 			panic(err.Error())
 		}

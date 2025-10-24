@@ -10,8 +10,8 @@ import (
 )
 
 type ClickhouseRepository struct {
-	dbPostgres *gorm.DB
-	once       sync.Once
+	dbClickhouse *gorm.DB
+	once         sync.Once
 }
 
 type ClickhouseConfiguration struct {
@@ -36,15 +36,15 @@ func (r *ClickhouseRepository) Start(configuration ClickhouseConfiguration) {
 }
 
 func (r *ClickhouseRepository) Stop() {
-	if r.dbPostgres != nil {
-		sqlDB, err := r.dbPostgres.DB()
+	if r.dbClickhouse != nil {
+		sqlDB, err := r.dbClickhouse.DB()
 		if err == nil {
 			_ = sqlDB.Close()
 		}
 	}
 }
 
-func (r *ClickhouseRepository) GetInstance() *gorm.DB {
+func (r *ClickhouseRepository) GetInstance(key string) *gorm.DB {
 
 	r.once.Do(func() {
 		logLevel := os.Getenv("SHOW_SQL") != "" && strings.ToLower(os.Getenv("SHOW_SQL")) == "true"
@@ -53,13 +53,13 @@ func (r *ClickhouseRepository) GetInstance() *gorm.DB {
 			logrus.Debugf("To Enable sql mode set variable SHOW_SQL to true")
 		}
 		var err error
-		r.dbPostgres, err = tools.GetGormDb()
+		r.dbClickhouse, err = tools.GetGormDb(key)
 		if err != nil {
 			panic(err.Error())
 		}
 		if logLevel {
-			r.dbPostgres.Logger.LogMode(4)
+			r.dbClickhouse.Logger.LogMode(4)
 		}
 	})
-	return r.dbPostgres
+	return r.dbClickhouse
 }

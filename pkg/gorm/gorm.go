@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/tecmise/lib-database/pkg/logger"
+	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
@@ -30,20 +31,12 @@ var (
 	}()
 )
 
-// LoadGormMySQL with the following parameters:
-/**
- * user string, pass string, host string, port int, dbName string
-**/
-func LoadGormMySQL(user string, pass string, host string, port int, dbName string) error {
-	return LoadGorm("mysql", user, pass, host, port, dbName, false)
-}
-
 // LoadGormPostgres with the following parameters:
 /**
  * user string, pass string, host string, port int, dbName string
 **/
 func LoadGormPostgres(user string, pass string, host string, port int, dbName string, sslMode bool) error {
-	return LoadGorm("postgres", user, pass, host, port, dbName, sslMode)
+	return LoadGorm("postgres", user, pass, host, port, dbName, sslMode, postgres.Open)
 }
 
 // LoadGormPostgres with the following parameters:
@@ -51,18 +44,18 @@ func LoadGormPostgres(user string, pass string, host string, port int, dbName st
  * user string, pass string, host string, port int, dbName string
 **/
 func LoadGormClickhouse(user string, pass string, host string, port int, dbName string, sslMode bool) error {
-	return LoadGorm("clickhouse", user, pass, host, port, dbName, sslMode)
+	return LoadGorm("clickhouse", user, pass, host, port, dbName, sslMode, clickhouse.Open)
 }
 
 // LoadGorm with the following parameters:
 /**
  * driverName string (such as mysql) user string, pass string, host string, port int, dbName string
 **/
-func LoadGorm(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool) error {
+func LoadGorm(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool, dialector func(dsn string) gorm.Dialector) error {
 	var err error
 
 	if poolGormDb[dbName] == nil {
-		poolGormDb[dbName], err = getGormConnection(driverName, user, pass, host, port, dbName, sslMode)
+		poolGormDb[dbName], err = getGormConnection(driverName, user, pass, host, port, dbName, sslMode, dialector)
 	}
 
 	return err
@@ -89,7 +82,7 @@ func SetGormDb(gormDb *gorm.DB, dbName string) {
 	poolGormDb[dbName] = gormDb
 }
 
-func getGormConnection(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool) (*gorm.DB, error) {
+func getGormConnection(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool, dialector func(dsn string) gorm.Dialector) (*gorm.DB, error) {
 	var db *gorm.DB
 	var err error
 	var dsn string
@@ -99,12 +92,18 @@ func getGormConnection(driverName string, user string, pass string, host string,
 	log.SetFormatter(&logrus.JSONFormatter{})
 	log.SetLevel(logrus.InfoLevel)
 
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+	db, err = gorm.Open(dialector(dsn), &gorm.Config{
 		Logger: logger.NewGormLogrus(log, gormLogger.Info),
 	})
 
 	if err != nil {
-		fmt.Println(err)
+		logrus.WithFields(map[string]interface{}{
+			"host":    host,
+			"port":    port,
+			"db_name": dbName,
+			"ssl":     sslMode,
+		}).Error("Erro ao subir conexao")
+		logrus.Fatalf("Failed to connect to database: %v", err)
 	}
 	//db.DB().SetConnMaxLifetime(time.Duration(getenv.DbConnPoolLifeTime) * time.Minute)
 	//db.DB().SetMaxIdleConns(getenv.DbConnPoolMaxIdle)
@@ -152,6 +151,10 @@ func defineDatabaseName(dbNameParam []string, poolSize int, firstKeyOfPool func(
 
 func generateDsn(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool) (string, error) {
 	var sslOption string
+
+	if driverName == "clickhouse" {
+		return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s", user, pass, host, port, dbName), nil
+	}
 
 	if sslMode {
 		sslOption = "verify-ca"
