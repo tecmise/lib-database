@@ -16,7 +16,9 @@ func GeneratePersistentEvents(db *gorm.DB) (*EntityEvent, error) {
 	}
 
 	obj := db.Statement.Dest
-	if _, ok := obj.(Auditable); !ok {
+
+	auditable, ok := obj.(Auditable)
+	if !ok {
 		return nil, fmt.Errorf("not a auditable object")
 	}
 
@@ -55,6 +57,7 @@ func GeneratePersistentEvents(db *gorm.DB) (*EntityEvent, error) {
 	}
 
 	return &EntityEvent{
+		Key:       auditable.GetKey(),
 		Table:     db.Statement.Table,
 		Content:   base64.StdEncoding.EncodeToString(content),
 		ContextID: uuid.Must(uuid.FromString(fmt.Sprintf("%v", contextID))),
