@@ -9,8 +9,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
+	"net/url"
 	"os"
-	"strconv"
 )
 
 type singleton struct {
@@ -35,8 +35,8 @@ var (
 /**
  * user string, pass string, host string, port int, dbName string
 **/
-func LoadGormPostgres(user string, pass string, host string, port int, dbName string, sslMode bool) error {
-	return LoadGorm("postgres", user, pass, host, port, dbName, sslMode, postgres.Open)
+func LoadGormPostgres(user string, pass string, host string, port int, dbName string, sslMode bool, schema string) error {
+	return LoadGorm("postgres", user, pass, host, port, dbName, sslMode, schema, postgres.Open)
 }
 
 // LoadGormPostgres with the following parameters:
@@ -44,18 +44,18 @@ func LoadGormPostgres(user string, pass string, host string, port int, dbName st
  * user string, pass string, host string, port int, dbName string
 **/
 func LoadGormClickhouse(user string, pass string, host string, port int, dbName string, sslMode bool) error {
-	return LoadGorm("clickhouse", user, pass, host, port, dbName, sslMode, clickhouse.Open)
+	return LoadGorm("clickhouse", user, pass, host, port, dbName, sslMode, "", clickhouse.Open)
 }
 
 // LoadGorm with the following parameters:
 /**
  * driverName string (such as mysql) user string, pass string, host string, port int, dbName string
 **/
-func LoadGorm(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool, dialector func(dsn string) gorm.Dialector) error {
+func LoadGorm(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool, schema string, dialector func(dsn string) gorm.Dialector) error {
 	var err error
 
 	if poolGormDb[dbName] == nil {
-		poolGormDb[dbName], err = getGormConnection(driverName, user, pass, host, port, dbName, sslMode, dialector)
+		poolGormDb[dbName], err = getGormConnection(driverName, user, pass, host, port, dbName, sslMode, schema, dialector)
 	}
 
 	return err
@@ -82,11 +82,11 @@ func SetGormDb(gormDb *gorm.DB, dbName string) {
 	poolGormDb[dbName] = gormDb
 }
 
-func getGormConnection(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool, dialector func(dsn string) gorm.Dialector) (*gorm.DB, error) {
+func getGormConnection(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool, schema string, dialector func(dsn string) gorm.Dialector) (*gorm.DB, error) {
 	var db *gorm.DB
 	var err error
 	var dsn string
-	dsn, err = generateDsn(driverName, user, pass, host, port, dbName, sslMode)
+	dsn, err = generateDsn(driverName, user, pass, host, port, dbName, sslMode, schema)
 
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
@@ -149,25 +149,37 @@ func defineDatabaseName(dbNameParam []string, poolSize int, firstKeyOfPool func(
 	return dbName, nil
 }
 
-func generateDsn(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool) (string, error) {
+func generateDsn(driverName string, user string, pass string, host string, port int, dbName string, sslMode bool, schema string) (string, error) {
 	var sslOption string
 
-	if driverName == "clickhouse" {
-		return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s", user, pass, host, port, dbName), nil
+	switch driverName {
+	case "clickhouse":
+		// Escapa user/pass/dbName para evitar caracteres problemáticos na URL
+		return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s",
+			url.PathEscape(user),
+			url.PathEscape(pass),
+			host,
+			port,
+			url.PathEscape(dbName),
+		), nil
+	case "postgres", "postgresql":
+		if sslMode {
+			sslOption = "verify-ca"
+		} else {
+			sslOption = "disable"
+		}
+
+		if schema != "" {
+			return fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s search_path=%s",
+				host, port, user, dbName, pass, sslOption, schema,
+			), nil
+		}
+
+		return fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s",
+			host, port, user, dbName, pass, sslOption,
+		), nil
+	default:
+		return "", errors.New("unsupported driver: " + driverName)
 	}
 
-	if sslMode {
-		sslOption = "verify-ca"
-	} else {
-		sslOption = "disable"
-	}
-
-	return "host=" + host +
-		" port=" + strconv.Itoa(port) +
-		" user=" + user +
-		" dbname=" + dbName +
-		" password=" + pass +
-		" sslmode=" + sslOption, nil
-
-	return "", errors.New("Can't generate DSN for " + driverName)
 }

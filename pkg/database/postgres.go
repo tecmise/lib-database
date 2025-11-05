@@ -21,6 +21,7 @@ type PostgresConfiguration struct {
 	DBPort int
 	DBName string
 	Ssl    bool
+	Schema string
 }
 
 var Postgres = &PostgresRepository{}
@@ -32,7 +33,9 @@ func (r *PostgresRepository) Start(configuration PostgresConfiguration) {
 		configuration.DBHost,
 		configuration.DBPort,
 		configuration.DBName,
-		configuration.Ssl)
+		configuration.Ssl,
+		configuration.Schema,
+	)
 }
 
 func (r *PostgresRepository) Stop() {
