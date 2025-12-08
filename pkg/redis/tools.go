@@ -16,11 +16,18 @@ func LoadRedis(user, pass, host string, port, db int) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	client = redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", host, port),
-		Password: pass,
-		DB:       db,
-	})
+	if len(pass) == 0 {
+		client = redis.NewClient(&redis.Options{
+			Addr: fmt.Sprintf("%s:%d", host, port),
+			DB:   db,
+		})
+	} else {
+		client = redis.NewClient(&redis.Options{
+			Addr:     fmt.Sprintf("%s:%d", host, port),
+			Password: pass,
+			DB:       db,
+		})
+	}
 
 	return nil
 }
