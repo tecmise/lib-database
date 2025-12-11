@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -12,18 +13,25 @@ var (
 	mutex  = &sync.Mutex{}
 )
 
-func LoadRedis(user, pass, host string, port, db int) error {
+func LoadRedis(pass, host string, port, db int) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
+	add := fmt.Sprintf("%s:%d", host, port)
 	if len(pass) == 0 {
+		logrus.WithFields(logrus.Fields{
+			"add": add,
+		}).Debug("Redis connection without password")
 		client = redis.NewClient(&redis.Options{
-			Addr: fmt.Sprintf("%s:%d", host, port),
+			Addr: add,
 			DB:   db,
 		})
 	} else {
+		logrus.WithFields(logrus.Fields{
+			"add": add,
+		}).Debug("Redis connection with password")
 		client = redis.NewClient(&redis.Options{
-			Addr:     fmt.Sprintf("%s:%d", host, port),
+			Addr:     add,
 			Password: pass,
 			DB:       db,
 		})

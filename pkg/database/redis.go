@@ -1,9 +1,11 @@
 package database
 
 import (
+	"context"
+	"sync"
+
 	"github.com/go-redis/redis/v8"
 	tools "github.com/tecmise/lib-database/pkg/redis"
-	"sync"
 )
 
 type RedisRepository struct {
@@ -23,7 +25,6 @@ var Redis = &RedisRepository{}
 
 func (r *RedisRepository) Start(configuration RedisConfiguration) {
 	_ = tools.LoadRedis(
-		configuration.DBUser,
 		configuration.DBPass,
 		configuration.DBHost,
 		configuration.DBPort,
@@ -46,4 +47,14 @@ func (r *RedisRepository) GetInstance() *redis.Client {
 		}
 	})
 	return r.dbRedis
+}
+
+func (r *RedisRepository) Ping() error {
+	ctx := context.Background()
+	client := r.GetInstance()
+	_, err := client.Ping(ctx).Result()
+	if err != nil {
+		return err
+	}
+	return nil
 }
